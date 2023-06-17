@@ -1,0 +1,383 @@
+package mazegame;
+
+import java.awt.*;
+import java.awt.event.*;
+import javax.swing.*;
+import java.util.LinkedList;
+import java.util.Queue;
+
+public class MazeGame implements ActionListener {
+    private int size;
+    private int[][] maze;
+    private boolean[][] visited;
+    private int[][] distance;
+    private int[][] parentX;
+    private int[][] parentY;
+    private Point redDroid;
+    private Point greenDroid;
+    private MazePanel mazePanel;
+    private JButton startButton;
+    private JButton pauseButton;
+    private JButton shuffleMapButton;
+    private JButton shuffleRedDroidButton;
+    private JButton shuffleGreenDroidButton;
+    private JButton redDroidViewButton;
+    private JButton greenDroidViewButton;
+    private boolean gameRunning;
+
+    public MazeGame() {
+        size = 21;
+
+        JFrame frame = new JFrame("Maze Game");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
+        JPanel buttonPanel = new JPanel();
+        startButton = new JButton("Start");
+        pauseButton = new JButton("Pause");
+        shuffleMapButton = new JButton("Shuffle Map");
+        shuffleRedDroidButton = new JButton("Shuffle Red Droid");
+        shuffleGreenDroidButton = new JButton("Shuffle Green Droid");
+        redDroidViewButton = new JButton("Red Droid View");
+        greenDroidViewButton = new JButton("Green Droid View");
+        buttonPanel.add(startButton);
+        buttonPanel.add(pauseButton);
+        buttonPanel.add(shuffleMapButton);
+        buttonPanel.add(shuffleRedDroidButton);
+        buttonPanel.add(shuffleGreenDroidButton);
+        buttonPanel.add(redDroidViewButton);
+        buttonPanel.add(greenDroidViewButton);
+
+        mazePanel = new MazePanel();
+        mazePanel.setPreferredSize(new Dimension(size * MazePanel.CELL_SIZE, size * MazePanel.CELL_SIZE));
+
+        frame.getContentPane().add(buttonPanel, BorderLayout.NORTH);
+        frame.getContentPane().add(mazePanel, BorderLayout.CENTER);
+
+        startButton.addActionListener(this);
+        pauseButton.addActionListener(this);
+        shuffleMapButton.addActionListener(this);
+        shuffleRedDroidButton.addActionListener(this);
+        shuffleGreenDroidButton.addActionListener(this);
+        redDroidViewButton.addActionListener(this);
+        greenDroidViewButton.addActionListener(this);
+
+        frame.pack();
+        frame.setVisible(true);
+    }
+
+    private void generateMaze() {
+        maze = new int[size][size];
+
+        // Menginisialisasi seluruh labirin dengan dinding
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < size; j++) {
+                maze[i][j] = 1;
+            }
+        }
+
+        // Membuat jalan melalui labirin dengan algoritma Depth-First Search
+        maze[1][1] = 0;
+
+        for (int i = 1; i < size - 1; i += 2) {
+            for (int j = 1; j < size - 1; j += 2) {
+                maze[i][j] = 0;
+
+                if (i != size - 2 && j != size - 2) {
+                    if (Math.random() < 0.5) {
+                        maze[i][j + 1] = 0;
+                    } else {
+                        maze[i + 1][j] = 0;
+                    }
+                } else if (i == size - 2) {
+                    maze[i][j + 1] = 0;
+                } else if (j == size - 2) {
+                    maze[i + 1][j] = 0;
+                }
+            }
+        }
+
+        // Mengatur posisi awal dan akhir droid
+        redDroid = new Point(1, 1);
+        greenDroid = new Point(size - 2, size - 2);
+
+        // Inisialisasi variabel untuk algoritma pengecekan jarak terpendek
+        visited = new boolean[size][size];
+        distance = new int[size][size];
+        parentX = new int[size][size];
+        parentY = new int[size][size];
+    }
+
+    private void shuffleMap() {
+        generateMaze();
+        mazePanel.repaint();
+        gameRunning = false;
+    }
+
+    private void shuffleRedDroid() {
+        int x = (int) (Math.random() * (size - 2)) + 1;
+        int y = (int) (Math.random() * (size - 2)) + 1;
+
+        // Memastikan droid merah tidak berada di posisi droid hijau
+        if (x == greenDroid.x && y == greenDroid.y) {
+            if (x > 1) {
+                x--;
+            } else {
+                x++;
+            }
+        }
+
+        redDroid = new Point(x, y);
+        mazePanel.repaint();
+        gameRunning = false;
+    }
+
+    private void shuffleGreenDroid() {
+        int x = (int) (Math.random() * (size - 2)) + 1;
+        int y = (int) (Math.random() * (size - 2)) + 1;
+
+        // Memastikan droid hijau tidak berada di posisi droid merah
+        if (x == redDroid.x && y == redDroid.y) {
+            if (x < size - 2) {
+                x++;
+            } else {
+                x--;
+            }
+        }
+
+        greenDroid = new Point(x, y);
+        mazePanel.repaint();
+        gameRunning = false;
+    }
+
+    private void findShortestPath(Point source) {
+        // Reset variabel pengecekan jarak terpendek
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < size; j++) {
+                visited[i][j] = false;
+                distance[i][j] = Integer.MAX_VALUE;
+                parentX[i][j] = -1;
+                parentY[i][j] = -1;
+            }
+        }
+
+        // Inisialisasi antrian BFS
+        Queue<Point> queue = new LinkedList<>();
+        queue.add(source);
+        visited[source.x][source.y] = true;
+        distance[source.x][source.y] = 0;
+
+        while (!queue.isEmpty()) {
+            Point current = queue.poll();
+
+            // Pengecekan tetangga atas
+            if (isValidCell(current.x - 1, current.y) && !visited[current.x - 1][current.y] && maze[current.x - 1][current.y] != 1) {
+                queue.add(new Point(current.x - 1, current.y));
+                visited[current.x - 1][current.y] = true;
+                distance[current.x - 1][current.y] = distance[current.x][current.y] + 1;
+                parentX[current.x - 1][current.y] = current.x;
+                parentY[current.x - 1][current.y] = current.y;
+            }
+
+            // Pengecekan tetangga bawah
+            if (isValidCell(current.x + 1, current.y) && !visited[current.x + 1][current.y] && maze[current.x + 1][current.y] != 1) {
+                queue.add(new Point(current.x + 1, current.y));
+                visited[current.x + 1][current.y] = true;
+                distance[current.x + 1][current.y] = distance[current.x][current.y] + 1;
+                parentX[current.x + 1][current.y] = current.x;
+                parentY[current.x + 1][current.y] = current.y;
+            }
+
+            // Pengecekan tetangga kiri
+            if (isValidCell(current.x, current.y - 1) && !visited[current.x][current.y - 1] && maze[current.x][current.y - 1] != 1) {
+                queue.add(new Point(current.x, current.y - 1));
+                visited[current.x][current.y - 1] = true;
+                distance[current.x][current.y - 1] = distance[current.x][current.y] + 1;
+                parentX[current.x][current.y - 1] = current.x;
+                parentY[current.x][current.y - 1] = current.y;
+            }
+
+            // Pengecekan tetangga kanan
+            if (isValidCell(current.x, current.y + 1) && !visited[current.x][current.y + 1] && maze[current.x][current.y + 1] != 1) {
+                queue.add(new Point(current.x, current.y + 1));
+                visited[current.x][current.y + 1] = true;
+                distance[current.x][current.y + 1] = distance[current.x][current.y] + 1;
+                parentX[current.x][current.y + 1] = current.x;
+                parentY[current.x][current.y + 1] = current.y;
+            }
+        }
+    }
+
+    private boolean isValidCell(int x, int y) {
+        return x >= 0 && x < size && y >= 0 && y < size;
+    }
+private void moveRedDroid() {
+    int randomDirection = (int) (Math.random() * 4);
+    int originalX = redDroid.x;
+    int originalY = redDroid.y;
+
+    while (true) {
+        switch (randomDirection) {
+            case 0: // Pergi ke atas
+                if (isValidCell(redDroid.x - 1, redDroid.y) && maze[redDroid.x - 1][redDroid.y] != 1) {
+                    redDroid.x--;
+                    return;
+                }
+                break;
+            case 1: // Pergi ke bawah
+                if (isValidCell(redDroid.x + 1, redDroid.y) && maze[redDroid.x + 1][redDroid.y] != 1) {
+                    redDroid.x++;
+                    return;
+                }
+                break;
+            case 2: // Pergi ke kiri
+                if (isValidCell(redDroid.x, redDroid.y - 1) && maze[redDroid.x][redDroid.y - 1] != 1) {
+                    redDroid.y--;
+                    return;
+                }
+                break;
+            case 3: // Pergi ke kanan
+                if (isValidCell(redDroid.x, redDroid.y + 1) && maze[redDroid.x][redDroid.y + 1] != 1) {
+                    redDroid.y++;
+                    return;
+                }
+                break;
+            default:
+                break;
+        }
+
+        randomDirection = (randomDirection + 1) % 4; // Mengubah arah secara berurutan (0-atas, 1-bawah, 2-kiri, 3-kanan)
+
+        // Jika sudah mencoba semua arah dan tidak ada jalan yang valid, kembali ke posisi awal
+        if (redDroid.x == originalX && redDroid.y == originalY) {
+            return;
+        }
+    }
+}
+
+
+private void moveGreenDroid() {
+    int randomDirection = (int) (Math.random() * 4);
+    int originalX = greenDroid.x;
+    int originalY = greenDroid.y;
+
+    while (true) {
+        switch (randomDirection) {
+            case 0: // Pergi ke atas
+                if (isValidCell(greenDroid.x - 1, greenDroid.y) && maze[greenDroid.x - 1][greenDroid.y] != 1) {
+                    greenDroid.x--;
+                    return;
+                }
+                break;
+            case 1: // Pergi ke bawah
+                if (isValidCell(greenDroid.x + 1, greenDroid.y) && maze[greenDroid.x + 1][greenDroid.y] != 1) {
+                    greenDroid.x++;
+                    return;
+                }
+                break;
+            case 2: // Pergi ke kiri
+                if (isValidCell(greenDroid.x, greenDroid.y - 1) && maze[greenDroid.x][greenDroid.y - 1] != 1) {
+                    greenDroid.y--;
+                    return;
+                }
+                break;
+            case 3: // Pergi ke kanan
+                if (isValidCell(greenDroid.x, greenDroid.y + 1) && maze[greenDroid.x][greenDroid.y + 1] != 1) {
+                    greenDroid.y++;
+                    return;
+                }
+                break;
+            default:
+                break;
+        }
+
+        randomDirection = (randomDirection + 1) % 4; // Mengubah arah secara berurutan (0-atas, 1-bawah, 2-kiri, 3-kanan)
+
+        // Jika sudah mencoba semua arah dan tidak ada jalan yang valid, kembali ke posisi awal
+        if (greenDroid.x == originalX && greenDroid.y == originalY) {
+            return;
+        }
+    }
+}
+
+    private class MazePanel extends JPanel {
+        public static final int CELL_SIZE = 20;
+
+        public MazePanel() {
+            setPreferredSize(new Dimension(size * CELL_SIZE, size * CELL_SIZE));
+            setBackground(Color.WHITE);
+        }
+
+        public void paintComponent(Graphics g) {
+            super.paintComponent(g);
+
+            // Gambar labirin
+            for (int i = 0; i < size; i++) {
+                for (int j = 0; j < size; j++) {
+                    if (maze[i][j] == 1) {
+                        g.setColor(Color.BLACK);
+                    } else {
+                        g.setColor(Color.WHITE);
+                    }
+                    g.fillRect(j * CELL_SIZE, i * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                    g.setColor(Color.BLACK);
+                    g.drawRect(j * CELL_SIZE, i * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                }
+            }
+
+            // Gambar droid merah
+            g.setColor(Color.RED);
+            g.fillOval(redDroid.y * CELL_SIZE, redDroid.x * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+
+            // Gambar droid hijau
+            g.setColor(Color.GREEN);
+            g.fillOval(greenDroid.y * CELL_SIZE, greenDroid.x * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        }
+    }
+public void actionPerformed(ActionEvent e) {
+    if (e.getSource() == startButton) {
+        gameRunning = true;
+        Thread gameThread = new Thread() {
+            public void run() {
+                while (gameRunning) {
+                    findShortestPath(greenDroid);
+                    moveRedDroid();
+                    moveGreenDroid(); // Tambahkan pemanggilan untuk menggerakkan droid hijau
+                    mazePanel.repaint();
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException ex) {
+                        ex.printStackTrace();
+                    }
+                }
+            }
+        };
+        gameThread.start();
+    }
+    // ...
+    // Kode lainnya tetap sama
+
+ else if (e.getSource() == pauseButton) {
+            gameRunning = false;
+        } else if (e.getSource() == shuffleMapButton) {
+            shuffleMap();
+        } else if (e.getSource() == shuffleRedDroidButton) {
+            shuffleRedDroid();
+        } else if (e.getSource() == shuffleGreenDroidButton) {
+            shuffleGreenDroid();
+        } else if (e.getSource() == redDroidViewButton) {
+            findShortestPath(redDroid);
+            mazePanel.repaint();
+        } else if (e.getSource() == greenDroidViewButton) {
+            findShortestPath(greenDroid);
+            mazePanel.repaint();
+        }
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                new MazeGame();
+            }
+        });
+    }
+}
